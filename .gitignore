@@ -1,0 +1,7 @@
+/target/
+/run/
+/logs/
+/config/local.toml
+/.mutsuki-qqbot/
+/.env
+*.secret.toml
