@@ -35,6 +35,12 @@ Native factory 必须由对应依赖仓库链接进 catalog；外部插件 artif
 发现。新增业务能力应在 BotPlugins、AgentKit 或独立业务仓库实现并发布，产品只修改配置进行
 选择，禁止把业务 Runner 复制到本模板。
 
+外置 ABI 包使用 Core SDK 的版本化 JSONL byte transport，并按
+`<dynamic_dir>/<plugin>/plugin.toml + DLL/SO/dylib` 安装。`artifact.path` 必须留在插件目录，
+`artifact.sha256` 必须匹配文件；ServiceHost 在 LoadPlan 冻结前完成校验、handshake 和
+Runner/ResourceProvider 注册。ABI 动态库是可信进程内代码，需要隔离时应选择 Process/Python
+部署。
+
 主配置只保存 Secret key 引用，实际值放在被 Git 忽略的 `config/local.secret.toml`，或使用
 `MUTSUKI_SECRET_<KEY>` 环境变量覆盖。默认 Runtime home 是 `~/.mutsuki`，其下包含
 `data`、`logs`、`plugins` 和 `run`。
