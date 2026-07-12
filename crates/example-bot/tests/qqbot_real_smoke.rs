@@ -29,6 +29,26 @@ async fn real_qqbot_ping_and_echo_smoke() {
         .await
         .expect("start real QQBot ServiceRuntime");
 
+    let gateway_health = tokio::time::timeout(Duration::from_secs(45), async {
+        loop {
+            let health = control(&control_config, ControlMethod::HealthCheck).await;
+            if health["event_sources"] == "ok" {
+                break health;
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+    })
+    .await;
+    let health = match gateway_health {
+        Ok(health) => health,
+        Err(_) => {
+            let health = control(&control_config, ControlMethod::HealthCheck).await;
+            runtime.shutdown().await;
+            panic!("QQ Gateway did not become healthy: {health}");
+        }
+    };
+    eprintln!("QQ Gateway healthy: {}", health["event_sources"]);
+
     eprintln!("Send /ping and /echo hello to the configured QQ group now.");
     let timeout_secs = std::env::var("MUTSUKI_QQBOT_SMOKE_TIMEOUT_SECS")
         .ok()
@@ -54,8 +74,20 @@ async fn real_qqbot_ping_and_echo_smoke() {
     })
     .await;
 
+    let diagnostics = if result.is_err() {
+        Some((
+            control(&control_config, ControlMethod::HealthCheck).await,
+            control(&control_config, ControlMethod::TaskList).await,
+        ))
+    } else {
+        None
+    };
     runtime.shutdown().await;
-    result.expect("real /ping and /echo did not complete before the smoke timeout");
+    if let Some((health, tasks)) = diagnostics {
+        panic!(
+            "real /ping and /echo did not complete before the smoke timeout; health={health}; tasks={tasks}"
+        );
+    }
 }
 
 async fn control(config: &ServiceConfig, method: ControlMethod) -> Value {
