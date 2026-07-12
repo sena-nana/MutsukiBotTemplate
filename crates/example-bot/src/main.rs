@@ -13,7 +13,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config_file: Some(config_path),
         ..Default::default()
     })?;
-    assemble_service(service)
+    assemble_service(service)?
         .start()
         .await?
         .run_foreground()
