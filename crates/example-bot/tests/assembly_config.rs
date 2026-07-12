@@ -4,6 +4,8 @@ use example_bot::assemble_service;
 use mutsuki_service_config::{ConfigOverrides, ServiceConfig};
 use tempfile::tempdir;
 
+const SIMPLE_TEMPLATE: &str = include_str!("../../../config/template.toml");
+
 #[tokio::test]
 async fn external_service_config_starts_only_the_neutral_business_plugin() {
     let root = tempdir().unwrap();
@@ -45,6 +47,35 @@ client_secret_key = "MISSING_TEMPLATE_QQ_SECRET"
         Err(error) => error,
     };
     assert!(error.to_string().contains("MISSING_TEMPLATE_QQ_SECRET"));
+}
+
+#[test]
+fn committed_template_exposes_only_product_configuration() {
+    let root = tempdir().unwrap();
+    let config_path = root.path().join("local.toml");
+    let secret_path = root.path().join("local.secret.toml");
+    let home = root
+        .path()
+        .join("home")
+        .to_string_lossy()
+        .replace('\\', "/");
+    let config = SIMPLE_TEMPLATE.replace("[service]", &format!("[service]\nhome_dir = \"{home}\""));
+    std::fs::write(&config_path, config).unwrap();
+    std::fs::write(
+        &secret_path,
+        "[secrets]\nQQBOT_CLIENT_SECRET = \"test-secret\"\n",
+    )
+    .unwrap();
+
+    let service = load(&config_path);
+
+    assert_eq!(service.service.instance_id, "mutsuki-bot");
+    assert_eq!(service.plugins.configured.len(), 3);
+    assert_eq!(service.core.max_tasks, 4096);
+    assert!(service.runners.restart);
+    assert!(!SIMPLE_TEMPLATE.contains("[core]"));
+    assert!(!SIMPLE_TEMPLATE.contains("[runners]"));
+    assert!(!SIMPLE_TEMPLATE.contains("[observe]"));
 }
 
 fn load(path: &Path) -> ServiceConfig {

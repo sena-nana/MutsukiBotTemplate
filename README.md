@@ -6,7 +6,24 @@ ServiceHost 配置和插件 catalog 选择。
 
 ## Run
 
-默认从仓库内被 Git 忽略的 `config/local.toml` 读取完整产品配置：
+先从仓库提供的简单模板创建本地配置：
+
+```powershell
+Copy-Item config/template.toml config/local.toml
+Copy-Item config/secret.template.toml config/local.secret.toml
+```
+
+只需修改 `app_id` 和本地 Secret。模板不会公开 Core、IPC、Runner、观测等高级 Host
+配置；未列出的字段由 ServiceHost 提供安全默认值。默认文件与目录如下：
+
+| 用途 | 默认位置 |
+| --- | --- |
+| 产品配置 | `config/local.toml` |
+| 本地 Secret | `config/local.secret.toml` |
+| Runtime home | `~/.mutsuki` |
+| 数据、日志、插件、运行文件 | `~/.mutsuki/{data,logs,plugins,run}` |
+
+随后直接启动：
 
 ```powershell
 cargo run -p example-bot
@@ -19,7 +36,7 @@ cargo run -p example-bot
 cargo run -p example-bot -- path/to/product.toml
 ```
 
-配置通过 `[[plugins.configured]]` 选择链接进产品 catalog 的原生插件，并可继续声明外部
+简单模板通过 `[[plugins.configured]]` 选择链接进产品 catalog 的原生插件，并可继续声明外部
 artifact/deployment。缺失 factory、capability 或 secret key 在启动阶段结构化失败；模板不会
 切换到 mock、空 Adapter 或默认 Provider。
 
@@ -36,7 +53,8 @@ id = "mutsuki.bot.command"
 id = "mutsuki.bot.adapter.qqbot"
 ```
 
-这是结构片段。仓库内实际 `config/local.toml` 由使用方维护且不提交，其中
+仓库只公开 [config/template.toml](config/template.toml) 这一份简单模板，不提供高级模板。
+实际 `config/local.toml` 由使用方维护且不提交，其中
 `[[plugins.configured]]` 明确选择插件，`[plugins.configured.config]` 由对应 owner factory
 严格解析；模板只注册 factory catalog。
 

@@ -9,7 +9,8 @@ description: Assemble Mutsuki BotTemplate from external configuration through pl
 
 ## 配置
 
-- 使用被 Git 忽略的本地产品配置；只提交中立 schema、字段契约、解析类型或生成逻辑。
+- 提交一个无账号、无凭据的简单 `config/template.toml`，只暴露用户需要选择的插件及其产品字段；不提交完整 Host 高级配置模板。
+- 使用被 Git 忽略的 `config/local.toml` 和本地 Secret 文件运行产品；高级目录、IPC、Runner 和观测设置优先继承 ServiceHost 默认，只有产品确有需要时才覆盖。
 - 按 CLI、`MUTSUKI_CONFIG`、仓库 `config/local.toml` 选择配置；选中的文件必须存在，不提供无配置 mock/default 模式。
 - 用 `[[plugins.configured]]` 声明插件 ID、启用状态和 owner-defined config；模板只注册 factory catalog，不替配置选择插件。
 - 主配置只保存 secret key；实际值由 Host 从显式引用且被忽略的专用 secret 文件或环境变量注入。
