@@ -17,9 +17,13 @@ description: Audit Mutsuki BotTemplate issues and route missing runtime, host, B
 ## 归属
 
 - Core：通用 Task、Runner、资源、装载和 LoadPlan。
+- StdPlugins：通用 config/db/fs/http/observe/resource/workflow 协议与插件。
+- PythonRunnerKit：Core Runner Link 的 Python wire mirror、backend、transport 和测试工具。
 - ServiceHost：生命周期、配置/secret、插件加载、EventSource、控制面和 health。
 - BotPlugins/平台仓库：Bot 协议、SDK、路由、命令和 Adapter/Gateway。
 - AgentKit/Provider 仓库：Agent 协议、模型、工具和记忆。
+- CliHost：ServiceHost 控制 API 的终端客户端。
+- TauriHost：桌面内嵌生命周期、Tauri/WebView bridge 和前端 SDK。
 - 本仓库：外部配置、产品装配、最小业务 Runner 和闭环验收。
 
 优先修复共享边界。上游缺失或未推送时报告 unavailable，不在模板中添加 shim 或用 test double 冒充生产能力。最终列出各仓库职责、验证和远端 revision。

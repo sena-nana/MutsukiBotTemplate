@@ -28,9 +28,13 @@ Issue 是需求线索，不是当前 API 的事实源。存在 `.codegraph/` 时
 | 仓库 | 职责 |
 | --- | --- |
 | `MutsukiCore` | 领域中立 contracts、Task/Runner、资源、LoadPlan 和 Rust Host/SDK 基础面 |
+| `MutsukiStdPlugins` | 领域中立标准协议，以及 config/db/fs/http/observe/resource/workflow 插件 |
+| `MutsukiPythonRunnerKit` | Core Runner Link 的 Python contract mirror、Runner backend、transport 和测试工具 |
 | `MutsukiServiceHost` | 服务生命周期、配置/secret、插件加载、EventSource、控制面和 health |
 | `MutsukiBotPlugins` | `mutsuki.bot.*` 协议、Bot SDK、标准 Runner 和平台 Adapter/Gateway |
 | `MutsukiAgentKit` | Agent 协议、SDK、模型、工具和记忆能力 |
+| `MutsukiCliHost` | ServiceHost 公开控制 API 的 CLI/TUI 客户端 |
+| `MutsukiTauriHost` | 内嵌 Core 的桌面 Host、Tauri/WebView bridge 和前端 SDK |
 | 其他能力仓库 | 自己领域的协议、插件、Provider、Runner 或 sidecar |
 | 本仓库 | 外部配置契约、产品装配、最小业务示例和跨仓库闭环验收 |
 
