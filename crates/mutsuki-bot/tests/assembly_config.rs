@@ -126,7 +126,6 @@ name = "template-test"
 token = "test-token"
 
 [plugins]
-builtin = []
 dynamic_dirs = []
 disabled_dir = "disabled"
 {}

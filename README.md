@@ -31,13 +31,16 @@ id = "owner.plugin.id"
 # 仅由插件 owner 定义和解析
 ```
 
-Native factory 必须由对应依赖仓库链接进 catalog；外部插件 artifact 由 ServiceHost 插件目录
-发现。新增业务能力应在 BotPlugins、AgentKit 或独立业务仓库实现并发布，产品只修改配置进行
-选择，禁止把业务 Runner 复制到本模板。
+同一份配置同时适用于 builtin 与 ABI。Native factory 由对应依赖仓库链接进 catalog；外部
+artifact 由 ServiceHost 插件目录形成库存，但不会因文件存在而自动启用。Host 在只有一种部署
+时直接选择，同时存在 builtin/ABI 时默认 builtin；管理工具可把部署偏好写入 Host 状态而无需
+修改业务配置。新增业务能力应在 BotPlugins、AgentKit 或独立业务仓库实现并发布，禁止把业务
+Runner 复制到本模板。
 
 外置 ABI 包使用 Core SDK 的版本化 JSONL byte transport，并按
 `<dynamic_dir>/<plugin>/plugin.toml + DLL/SO/dylib` 安装。`artifact.path` 必须留在插件目录，
-`artifact.sha256` 必须匹配文件；ServiceHost 在 LoadPlan 冻结前完成校验、handshake 和
+`artifact.sha256` 必须匹配文件；ServiceHost 在 LoadPlan 冻结前完成校验、ABI v2
+`plugin.initialize` 和
 Runner/ResourceProvider 注册。ABI 动态库是可信进程内代码，需要隔离时应选择 Process/Python
 部署。
 

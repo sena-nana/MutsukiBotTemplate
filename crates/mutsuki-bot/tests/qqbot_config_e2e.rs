@@ -91,7 +91,6 @@ tcp_debug_addr = "{}"
 token = "test-token"
 
 [plugins]
-builtin = []
 dynamic_dirs = []
 disabled_dir = "disabled"
 
