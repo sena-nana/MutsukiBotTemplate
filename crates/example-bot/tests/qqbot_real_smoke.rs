@@ -49,50 +49,78 @@ async fn real_qqbot_ping_and_echo_smoke() {
     };
     eprintln!("QQ Gateway healthy: {}", health["event_sources"]);
 
-    eprintln!("Send /ping and /echo hello to the configured QQ group now.");
+    eprintln!("Send /ping and /echo hello to the configured QQ chat now.");
     let timeout_secs = std::env::var("MUTSUKI_QQBOT_SMOKE_TIMEOUT_SECS")
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or(120);
-    let result = tokio::time::timeout(Duration::from_secs(timeout_secs), async {
+    let send_tasks = tokio::time::timeout(Duration::from_secs(timeout_secs), async {
         loop {
             let tasks = control(&control_config, ControlMethod::TaskList).await;
-            let completed_sends = tasks
+            let sends = tasks
                 .as_array()
                 .into_iter()
                 .flatten()
-                .filter(|task| {
-                    task["protocol_id"] == "mutsuki.bot.message/send@1"
-                        && task["status"] == "completed"
-                })
-                .count();
-            if completed_sends >= 2 {
-                break;
+                .filter(|task| task["protocol_id"] == "mutsuki.bot.message/send@1")
+                .cloned()
+                .collect::<Vec<_>>();
+            if sends.len() >= 2
+                && sends
+                    .iter()
+                    .all(|task| matches!(task["status"].as_str(), Some("completed" | "failed")))
+            {
+                break sends;
             }
             tokio::time::sleep(Duration::from_millis(250)).await;
         }
     })
     .await;
 
-    let diagnostics = if result.is_err() {
-        Some((
+    let diagnostics = match send_tasks {
+        Ok(tasks) if tasks.iter().all(|task| task["status"] == "completed") => None,
+        Ok(tasks) => {
+            let mut outcomes = Vec::new();
+            for task in &tasks {
+                outcomes.push(
+                    control_with_params(
+                        &control_config,
+                        ControlMethod::TaskOutcome,
+                        serde_json::json!({"id": task["task_id"]}),
+                    )
+                    .await,
+                );
+            }
+            Some((
+                control(&control_config, ControlMethod::HealthCheck).await,
+                Value::Array(tasks),
+                Value::Array(outcomes),
+            ))
+        }
+        Err(_) => Some((
             control(&control_config, ControlMethod::HealthCheck).await,
             control(&control_config, ControlMethod::TaskList).await,
-        ))
-    } else {
-        None
+            Value::Null,
+        )),
     };
     runtime.shutdown().await;
-    if let Some((health, tasks)) = diagnostics {
+    if let Some((health, tasks, outcomes)) = diagnostics {
         panic!(
-            "real /ping and /echo did not complete before the smoke timeout; health={health}; tasks={tasks}"
+            "real /ping and /echo failed or timed out; health={health}; tasks={tasks}; outcomes={outcomes}"
         );
     }
 }
 
 async fn control(config: &ServiceConfig, method: ControlMethod) -> Value {
+    control_with_params(config, method, Value::Null).await
+}
+
+async fn control_with_params(
+    config: &ServiceConfig,
+    method: ControlMethod,
+    params: Value,
+) -> Value {
     let client = mutsuki_service_ipc::ControlClient::new(config.into());
-    let response = client.request(method, Value::Null).await.unwrap();
+    let response = client.request(method, params).await.unwrap();
     assert!(response.ok, "control failed: {:?}", response.error);
     response.result.unwrap_or(Value::Null)
 }
