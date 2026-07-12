@@ -1,18 +1,18 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use example_bot::assemble_service;
+use example_bot::{assemble_service, repository_local_config_path};
 use mutsuki_service_config::{ConfigOverrides, ServiceConfig};
 use mutsuki_service_control::ControlMethod;
 use serde_json::Value;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "requires a local QQBot config, Host secret and manual /ping plus /echo messages"]
+#[ignore = "requires ignored local QQBot config/secret files and manual /ping plus /echo messages"]
 async fn real_qqbot_ping_and_echo_smoke() {
-    let Some(path) = std::env::var_os("MUTSUKI_QQBOT_SMOKE_CONFIG").map(PathBuf::from) else {
-        eprintln!("SKIPPED: set MUTSUKI_QQBOT_SMOKE_CONFIG and the referenced Host secret");
-        return;
-    };
+    let path = std::env::var_os("MUTSUKI_QQBOT_SMOKE_CONFIG")
+        .or_else(|| std::env::var_os("MUTSUKI_CONFIG"))
+        .map(PathBuf::from)
+        .unwrap_or_else(repository_local_config_path);
     let service = ServiceConfig::load(ConfigOverrides {
         config_file: Some(path),
         ..Default::default()

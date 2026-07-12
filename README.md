@@ -6,10 +6,17 @@ ServiceHost 配置和插件 catalog 选择。
 
 ## Run
 
-配置文件不属于模板仓库。创建本地 ServiceHost 配置后，将路径作为唯一参数传入：
+默认从仓库内被 Git 忽略的 `config/local.toml` 读取完整产品配置：
 
 ```powershell
-cargo run -p example-bot -- path/to/local-service.toml
+cargo run -p example-bot
+```
+
+配置路径优先级是命令行参数、`MUTSUKI_CONFIG`、`config/local.toml`。显式或默认选择的
+配置缺失时启动失败，不会生成空 Bot。命令行覆盖仍可用于其他产品配置：
+
+```powershell
+cargo run -p example-bot -- path/to/product.toml
 ```
 
 配置通过 `[[plugins.configured]]` 选择链接进产品 catalog 的原生插件，并可继续声明外部
@@ -29,9 +36,14 @@ id = "mutsuki.bot.command"
 id = "mutsuki.bot.adapter.qqbot"
 ```
 
-这是结构片段，不是可运行配置。QQ 字段由 BotPlugins 严格解析；模板只注册其 factory
-catalog。`client_secret_key = "QQBOT_CLIENT_SECRET"` 对应默认 Host 环境变量
-`MUTSUKI_SECRET_QQBOT_CLIENT_SECRET`，配置中不得保存 secret 或 access token。
+这是结构片段。仓库内实际 `config/local.toml` 由使用方维护且不提交，其中
+`[[plugins.configured]]` 明确选择插件，`[plugins.configured.config]` 由对应 owner factory
+严格解析；模板只注册 factory catalog。
+
+主配置通过 `[security] secret_file = "local.secret.toml"` 引用同样被忽略的
+`config/local.secret.toml`。主配置只保存 `client_secret_key = "QQBOT_CLIENT_SECRET"`；
+Secret 文件使用 `[secrets]` 保存实际值。环境变量 `MUTSUKI_SECRET_QQBOT_CLIENT_SECRET`
+仍可覆盖文件值。Secret 不得进入已提交配置、manifest、日志或 task。
 
 ## Business Runner
 
@@ -48,15 +60,15 @@ EventSource、Runner 和 task routing：
 cargo test -p example-bot --test qqbot_config_e2e
 ```
 
-真实账号 smoke 需要 ignored local config 和对应 Host secret；启动后在群内发送 `/ping` 与
-`/echo hello`：
+真实账号 smoke 默认复用仓库内 ignored local config/secret 文件；启动后在 QQ 私聊或目标群
+发送 `/ping` 与 `/echo hello`：
 
 ```powershell
-$env:MUTSUKI_QQBOT_SMOKE_CONFIG = "path/to/local-service.toml"
 cargo test -p example-bot --test qqbot_real_smoke -- --ignored --nocapture
 ```
 
-未提供本地凭据时该层不执行，也不能用 fake 结果替代。
+可用 `MUTSUKI_QQBOT_SMOKE_CONFIG` 或 `MUTSUKI_CONFIG` 覆盖路径。缺失本地凭据时该层明确
+失败，也不能用 fake 结果替代。
 
 ## Verification
 

@@ -1,4 +1,3 @@
-use std::sync::Mutex;
 use std::time::Duration;
 
 use example_bot::assemble_service;
@@ -9,21 +8,21 @@ use serde_json::Value;
 use tempfile::tempdir;
 use tokio::net::TcpListener;
 
-static ENV_LOCK: Mutex<()> = Mutex::new(());
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn external_config_runs_real_service_runtime_through_fake_qq_boundaries() {
-    let _env = ENV_LOCK.lock().unwrap();
     let fake = FakeQqServer::start().await;
     let secret_key = format!("TEMPLATE_QQ_SECRET_{}", fake.websocket_addr().port());
-    let secret_env = format!("MUTSUKI_SECRET_{secret_key}");
-    unsafe { std::env::set_var(&secret_env, "TEST_CLIENT_SECRET") };
 
     let root = tempdir().unwrap();
     let probe = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let ipc_addr = probe.local_addr().unwrap();
     drop(probe);
     let qq = fake.config("template", "TEST_APP_ID", &secret_key);
+    std::fs::write(
+        root.path().join("product.secret.toml"),
+        format!("[secrets]\n{secret_key} = \"TEST_CLIENT_SECRET\"\n"),
+    )
+    .unwrap();
     let config_path = root.path().join("product.toml");
     std::fs::write(&config_path, product_toml(root.path(), ipc_addr, &qq)).unwrap();
     let service = ServiceConfig::load(ConfigOverrides {
@@ -72,7 +71,6 @@ async fn external_config_runs_real_service_runtime_through_fake_qq_boundaries() 
 
     runtime.shutdown().await;
     let snapshot = fake.shutdown().await;
-    unsafe { std::env::remove_var(&secret_env) };
     assert_eq!(snapshot.websocket_connections, 2);
     assert_eq!(snapshot.gateway_auth_frames[0]["op"], 2);
     assert_eq!(snapshot.gateway_auth_frames[1]["op"], 6);
@@ -133,6 +131,9 @@ retry_max_delay_ms = 0
 reconnect_initial_delay_ms = 10
 reconnect_max_delay_ms = 20
 reconnect_jitter_ms = 0
+
+[security]
+secret_file = "product.secret.toml"
 
 [observe]
 console = false
