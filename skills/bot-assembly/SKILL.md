@@ -10,6 +10,7 @@ description: Assemble Mutsuki BotTemplate from external configuration through pl
 ## 配置
 
 - 使用被 Git 忽略的外部配置；只提交中立 schema、字段契约、解析类型或生成逻辑。
+- 生产入口要求显式配置路径，不提供无配置 mock/default 模式。
 - 配置只保存 secret key，由 Host 注入真实值。
 - 未知字段和缺失 capability、plugin、deployment 或 secret 必须结构化失败。
 

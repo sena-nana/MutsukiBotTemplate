@@ -2,23 +2,89 @@
 
 use std::time::Duration;
 
-use example_bot::{assemble_agent_service, assemble_mock_agent_service};
+use example_bot::plugin;
 use mutsuki_agent_bundle::{
-    AgentLoop, AgentPluginBundle, HttpModelProvider, HttpModelProviderOptions, ModelGateway,
+    AgentLoop, AgentPluginBundle, AgentRuntimeRunner, HttpModelProvider, HttpModelProviderOptions,
+    ModelGateway,
 };
 use mutsuki_bot_protocol::{
-    BOT_COMMAND_PARSE_PROTOCOL_ID, BotAccountRef, BotEvent, BotEventKind, BotMessage, BotPlatform,
-    BotTarget,
+    BOT_COMMAND_PARSE_PROTOCOL_ID, BotAccountRef, BotEvent, BotEventKind, BotEventSubscription,
+    BotMessage, BotPlatform, BotTarget,
 };
+use mutsuki_plugin_bot_command::{BotCommandRunner, bot_command_manifest};
+use mutsuki_plugin_bot_event_router::{BotEventRouterRunner, bot_event_router_manifest};
 use mutsuki_runtime_contracts::{Task, TaskBatch};
 use mutsuki_service_config::{IpcTransport, ServiceConfig};
-use mutsuki_service_control::{ControlMethod, ControlRequest};
+use mutsuki_service_control::ControlMethod;
 use mutsuki_service_runtime::{
     HostEventSource, HostEventSourceContext, HostEventSourceDescriptor, HostEventSourceFuture,
-    HostEventSourceHealth,
+    HostEventSourceHealth, ServiceRuntimeBuilder,
 };
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
+
+#[path = "support/agent_tool.rs"]
+mod agent_tool;
+#[path = "support/mock_transport.rs"]
+mod mock_transport;
+
+fn assemble_mock_agent_service(service: ServiceConfig) -> ServiceRuntimeBuilder {
+    assemble_agent_service(service, AgentPluginBundle::default())
+}
+
+fn assemble_agent_service(
+    service: ServiceConfig,
+    agent: AgentPluginBundle,
+) -> ServiceRuntimeBuilder {
+    agent.tools.register(agent_tool::tool_descriptor()).unwrap();
+    install_agent_bundle(
+        ServiceRuntimeBuilder::new(service)
+            .register_builtin_plugin(bot_event_router_manifest(1))
+            .register_builtin_plugin(bot_command_manifest(1))
+            .register_builtin_plugin(plugin::manifest(1))
+            .register_builtin_plugin(mock_transport::manifest(1))
+            .register_builtin_plugin(agent_tool::manifest(1))
+            .register_builtin_runner(move || {
+                Box::new(BotEventRouterRunner::new(1, vec![command_subscription()]))
+            })
+            .register_builtin_runner(|| Box::new(BotCommandRunner::new(1, vec!["/".into()])))
+            .register_builtin_runner(|| plugin::runner(1))
+            .register_builtin_runner(|| mock_transport::runner(1))
+            .register_builtin_runner(|| agent_tool::runner(1)),
+        agent,
+    )
+}
+
+fn install_agent_bundle(
+    mut builder: ServiceRuntimeBuilder,
+    agent: AgentPluginBundle,
+) -> ServiceRuntimeBuilder {
+    for manifest in agent.manifests() {
+        builder = builder.register_builtin_plugin(manifest);
+    }
+    for kind in AgentRuntimeRunner::ALL {
+        let agent = agent.clone();
+        builder = builder
+            .register_runtime_client_runner(move |client| agent.runtime_runner(kind, client));
+    }
+    let effect = agent.clone();
+    builder = builder.register_fallible_builtin_runner(move || {
+        let handle = tokio::runtime::Handle::try_current().map_err(|error| error.to_string())?;
+        Ok::<_, String>(effect.http_effect_runner(handle))
+    });
+    let poll = agent.clone();
+    builder.register_builtin_runner(move || poll.model_poll_runner())
+}
+
+fn command_subscription() -> BotEventSubscription {
+    BotEventSubscription {
+        subscription_id: "message-to-command".into(),
+        handler_protocol_id: BOT_COMMAND_PARSE_PROTOCOL_ID.into(),
+        handler_binding_id: None,
+        platform: None,
+        event_kind: Some(BotEventKind::MessageCreated),
+    }
+}
 
 struct AskSource {
     descriptor: HostEventSourceDescriptor,
@@ -242,20 +308,16 @@ async fn service_runtime_routes_ask_callback_and_no_side_effect_tool() {
     assert!(!tasks.to_string().contains("AGENT_MODEL_API_KEY"));
 
     let health = control(&control_config, ControlMethod::HealthCheck).await;
-    assert_eq!(health["components"]["mutsuki.agent"]["status"], "ok");
-    assert_eq!(
-        health["components"]["mutsuki.agent"]["model"]["default_provider"],
-        "mock"
-    );
+    assert_eq!(health["service"], "ok");
+    assert_eq!(health["core"], "ok");
+    assert_eq!(health["components"], json!({}));
     let reload = control(&control_config, ControlMethod::PluginReload).await;
     assert_eq!(reload["previous_generation"], 1);
     assert_eq!(reload["registry_generation"], 2);
     assert_eq!(reload["runner_errors"], json!([]));
     let reloaded_health = control(&control_config, ControlMethod::HealthCheck).await;
-    assert_eq!(
-        reloaded_health["components"]["mutsuki.agent"]["status"],
-        "ok"
-    );
+    assert_eq!(reloaded_health["service"], "ok");
+    assert_eq!(reloaded_health["core"], "ok");
 
     shutdown(runtime, &control_config).await;
 }
@@ -360,16 +422,8 @@ async fn control(config: &ServiceConfig, method: ControlMethod) -> Value {
 }
 
 async fn control_with(config: &ServiceConfig, method: ControlMethod, params: Value) -> Value {
-    let response = mutsuki_service_ipc::request(
-        config,
-        ControlRequest {
-            token: "test-token".into(),
-            method,
-            params,
-        },
-    )
-    .await
-    .unwrap();
+    let client = mutsuki_service_ipc::ControlClient::new(config.into());
+    let response = client.request(method, params).await.unwrap();
     assert!(response.ok, "control failed: {:?}", response.error);
     response.result.unwrap_or(Value::Null)
 }

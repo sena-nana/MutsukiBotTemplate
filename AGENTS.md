@@ -31,7 +31,7 @@ Issue 是需求线索，不是当前 API 的事实源。存在 `.codegraph/` 时
 | `MutsukiStdPlugins` | 领域中立标准协议，以及 config/db/fs/http/observe/resource/workflow 插件 |
 | `MutsukiPythonRunnerKit` | Core Runner Link 的 Python contract mirror、Runner backend、transport 和测试工具 |
 | `MutsukiServiceHost` | 服务生命周期、配置/secret、插件加载、EventSource、控制面和 health |
-| `MutsukiBotPlugins` | `mutsuki.bot.*` 协议、Bot SDK、标准 Runner 和平台 Adapter/Gateway |
+| `MutsukiBotPlugins` | `mutsuki.bot.*` 协议、Bot SDK、标准 Runner、平台 Adapter/Gateway 和显式 Host integration crate |
 | `MutsukiAgentKit` | Agent 协议、SDK、模型、工具和记忆能力 |
 | `MutsukiCliHost` | ServiceHost 公开控制 API 的 CLI/TUI 客户端 |
 | `MutsukiTauriHost` | 内嵌 Core 的桌面 Host、Tauri/WebView bridge 和前端 SDK |
@@ -47,6 +47,7 @@ Issue 是需求线索，不是当前 API 的事实源。存在 `.codegraph/` 时
 5. Runner 只走 batch-first `run_batch`；task 操作使用 `TaskHandle`/`TaskSubmitter`；业务只依赖通用 Bot 协议。
 6. RuntimeProfile/RuntimeLoadPlan 是装配权威；registry freeze 后不得动态越权注册。
 7. 缺失 capability、配置、secret、artifact 或 revision 必须结构化失败，禁止假成功和吞错。
+8. 生产入口必须要求外部配置路径，只注册平台中立业务 Runner；mock、QQBot、Agent 和 Provider 具体装配只能出现在测试验收中。
 
 ## Git 与验证
 

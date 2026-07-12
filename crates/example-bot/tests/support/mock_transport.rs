@@ -1,6 +1,3 @@
-use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
-
 use mutsuki_bot_protocol::{BOT_MESSAGE_SEND_PROTOCOL_ID, BotMessage};
 use mutsuki_runtime_contracts::{
     CompletionBatch, DomainEvent, ExecutionClass, OrderingRequirement, PluginManifest,
@@ -12,6 +9,7 @@ use mutsuki_runtime_core::{Runner, RunnerContext, RuntimeResult};
 use mutsuki_runtime_host::runner_manifest;
 use mutsuki_runtime_sdk::map_work_batch_entries;
 use serde_json::json;
+use std::collections::BTreeMap;
 
 pub const MOCK_TRANSPORT_PLUGIN_ID: &str = "template.mock.transport";
 const MOCK_TRANSPORT_RUNNER_ID: &str = "template.mock.transport.send";
@@ -23,39 +21,11 @@ pub fn manifest(generation: u64) -> PluginManifest {
 pub fn runner(generation: u64) -> Box<dyn Runner> {
     Box::new(MockTransportRunner {
         descriptor: descriptor(generation),
-        recorded: None,
-        notify: None,
-        fail: false,
-    })
-}
-
-pub fn recording_runner(
-    generation: u64,
-    recorded: Arc<Mutex<Vec<BotMessage>>>,
-    notify: Arc<tokio::sync::Notify>,
-) -> Box<dyn Runner> {
-    Box::new(MockTransportRunner {
-        descriptor: descriptor(generation),
-        recorded: Some(recorded),
-        notify: Some(notify),
-        fail: false,
-    })
-}
-
-pub fn failing_runner(generation: u64, notify: Arc<tokio::sync::Notify>) -> Box<dyn Runner> {
-    Box::new(MockTransportRunner {
-        descriptor: descriptor(generation),
-        recorded: None,
-        notify: Some(notify),
-        fail: true,
     })
 }
 
 struct MockTransportRunner {
     descriptor: RunnerDescriptor,
-    recorded: Option<Arc<Mutex<Vec<BotMessage>>>>,
-    notify: Option<Arc<tokio::sync::Notify>>,
-    fail: bool,
 }
 
 impl Runner for MockTransportRunner {
@@ -71,18 +41,6 @@ impl Runner for MockTransportRunner {
         map_work_batch_entries(&batch, |task| {
             let message: BotMessage = serde_json::from_value(task.payload.clone())
                 .map_err(|error| failure(format!("message.decode:{error}")))?;
-            if let Some(recorded) = &self.recorded {
-                recorded
-                    .lock()
-                    .expect("mock transport mutex")
-                    .push(message.clone());
-            }
-            if let Some(notify) = &self.notify {
-                notify.notify_waiters();
-            }
-            if self.fail {
-                return Err(failure("message.send.failed"));
-            }
             let mut result = RunnerResult::completed(task.task_id.clone());
             result.events.push(DomainEvent {
                 event_id: format!("{}:sent", task.task_id),

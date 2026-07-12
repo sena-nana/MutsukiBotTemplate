@@ -1,0 +1,19 @@
+# Mutsuki Repository Boundaries
+
+依赖方向固定为：Core → 标准/领域能力 → Host integration → 产品模板。下游不得复制上游
+实现或通过本地路径反向引用。
+
+| Owner | Owned implementation | Allowed consumers |
+| --- | --- | --- |
+| MutsukiCore | contracts、TaskPool、Runner、Resource facts、LoadPlan、通用 Host/Runner helper | 全部 runtime 消费方 |
+| MutsukiStdPlugins | config/db/fs/http/observe/resource/workflow 协议与插件 | Host 与产品 |
+| MutsukiPythonRunnerKit | Python contract mirror、Runner backend、transport；fake 仅在 testing | Python 插件进程 |
+| MutsukiServiceHost | 服务生命周期、配置/secret、EventSource、控制面、监督策略 | CLI、integration、产品 |
+| MutsukiBotPlugins | Bot 协议/Runner/平台 Adapter；ServiceHost bridge 位于独立 integration crate | Bot 产品 |
+| MutsukiAgentKit | AgentLoop、tool、memory、model；网络 Provider 仅走 effect Runner | Agent 产品与模板测试 |
+| MutsukiCliHost | 公开 ControlClient 的终端 UI | 用户 |
+| MutsukiTauriHost | 桌面生命周期、Tauri/WebView bridge、桌面策略 | 桌面产品 |
+| MutsukiBotTemplate | 外部配置入口、最小业务 Runner、跨仓库验收 | 产品 fork |
+
+所有跨仓库 Cargo 依赖使用远端 Git URL 和已推送固定 `rev`。配置与 secret 不提交；缺失
+capability、artifact、backend 或 secret 必须 fail loud。

@@ -12,6 +12,7 @@ description: Validate Mutsuki BotTemplate through real ServiceRuntime assembly, 
 - 单元测试可直接覆盖配置、纯函数、Runner entry 和 manifest builder。
 - 集成测试可替换 transport，但必须保留正常 task、Runner 和 ResultRouter 路径。
 - 产品 E2E 从外部配置启动真实 `ServiceRuntime`；fake server 只替换 QQ/HTTP/WebSocket/Provider 等外部系统。
+- 在测试临时目录生成所有配置，不提交可直接运行的 TOML/JSON。
 - 真实 smoke 只使用忽略配置和环境 secret，不提交凭据或敏感输出。
 
 ## 验收
