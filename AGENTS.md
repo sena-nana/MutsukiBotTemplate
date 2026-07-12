@@ -1,7 +1,7 @@
 # MutsukiBotTemplate 工作规范
 
 本仓库是 **配置驱动的 Mutsuki Bot 产品模板**，也是 Bot 需求进入多仓库体系后的
-能力边界核查入口。它只负责外部配置契约、产品装配、最小业务示例和闭环验收，
+能力边界核查入口。它只负责外部配置契约、catalog 聚合、产品装配和跨仓库验收，
 不拥有 Core、Host、Bot、Agent 或平台能力的实现。
 
 ## 阅读顺序
@@ -18,7 +18,6 @@ Issue 是需求线索，不是当前 API 的事实源。存在 `.codegraph/` 时
 - `skills/capability-boundaries/SKILL.md`：判断能力归属和跨仓库顺序。
 - `skills/remote-dependencies/SKILL.md`：Git 依赖、远端 pin、lockfile 和独立 checkout。
 - `skills/bot-assembly/SKILL.md`：配置契约、LoadPlan 和 ServiceRuntime 装配。
-- `skills/business-runner/SKILL.md`：命令、Bot task 和 batch-first 业务 Runner。
 - `skills/integration-testing/SKILL.md`：mock、fake server、真实 smoke、health 和 shutdown。
 
 职责不明先读 capability-boundaries；涉及依赖同时读 remote-dependencies。
@@ -36,7 +35,7 @@ Issue 是需求线索，不是当前 API 的事实源。存在 `.codegraph/` 时
 | `MutsukiCliHost` | ServiceHost 公开控制 API 的 CLI/TUI 客户端 |
 | `MutsukiTauriHost` | 内嵌 Core 的桌面 Host、Tauri/WebView bridge 和前端 SDK |
 | 其他能力仓库 | 自己领域的协议、插件、Provider、Runner 或 sidecar |
-| 本仓库 | 外部配置契约、产品装配、最小业务示例和跨仓库闭环验收 |
+| 本仓库 | 外部配置契约、catalog 聚合、ServiceRuntime 启动和跨仓库装配验收 |
 
 ## Hard Rules
 
@@ -44,10 +43,10 @@ Issue 是需求线索，不是当前 API 的事实源。存在 `.codegraph/` 时
 2. 禁止提交指向仓库外的 Cargo `path`/`[patch]`；跨仓库 Git 依赖固定 `rev`，且远端必须可独立解析。仓库内 member path 不受此限。
 3. 配置只声明 capability、插件和部署选择。模板不按平台、Agent、Provider 或 backend 硬编码替代路径。
 4. 只提交无账号、无凭据的简单 `config/template.toml` 与 Secret 占位模板；不暴露完整 Host 高级配置样例。实际 `config/local.toml`、账号和专用 secret 文件只能本地存在并被 Git 忽略，主配置只保存 Host secret key 引用。
-5. Runner 只走 batch-first `run_batch`；task 操作使用 `TaskHandle`/`TaskSubmitter`；业务只依赖通用 Bot 协议。
+5. 模板不得拥有业务 Runner、命令、回复或 Agent 流程；这些能力由 owner 仓库实现，并遵守 batch-first、`TaskHandle` 和通用协议契约。
 6. RuntimeProfile/RuntimeLoadPlan 是装配权威；registry freeze 后不得动态越权注册。
 7. 缺失 capability、配置、secret、artifact 或 revision 必须结构化失败，禁止假成功和吞错。
-8. 生产入口按 CLI、`MUTSUKI_CONFIG`、仓库 `config/local.toml` 的顺序选择配置；脚手架只公开用户需要修改的产品字段，目录、IPC、Runner 和观测等高级值继承 ServiceHost 默认。只固定注册平台中立业务 Runner；可用平台/Agent/Provider 只能作为 owner factory catalog 暴露，由配置中的 `[[plugins.configured]]` 选择并提供 owner 配置，禁止默认启用或 fallback。Mock 仅限测试。
+8. 生产入口按 CLI、`MUTSUKI_CONFIG`、仓库 `config/local.toml` 的顺序选择配置；脚手架只公开用户需要修改的产品字段，目录、IPC、Runner 和观测等高级值继承 ServiceHost 默认。生产代码只聚合 owner factory catalog，不默认启用平台、Router、Command、Agent、Provider 或业务插件。零插件配置可以启动为空闲 Runtime；显式选择的能力缺失时必须失败。Mock 仅限测试。
 
 ## Git 与验证
 

@@ -13,11 +13,14 @@
 | MutsukiAgentKit | AgentLoop、tool、memory、model；网络 Provider 仅走 effect Runner | Agent 产品与模板测试 |
 | MutsukiCliHost | 公开 ControlClient 的终端 UI | 用户 |
 | MutsukiTauriHost | 桌面生命周期、Tauri/WebView bridge、桌面策略 | 桌面产品 |
-| MutsukiBotTemplate | 外部配置入口、最小业务 Runner、跨仓库验收 | 产品 fork |
+| MutsukiBotTemplate | 外部配置入口、owner catalog 聚合、Runtime 启动和跨仓库装配验收 | 产品 fork |
 
 链接进产品的原生实现只能以 owner 提供的 `ConfiguredPluginFactory` 进入模板。模板注册可用
 catalog，外部 `[[plugins.configured]]` 决定实际启用项；owner 配置对模板保持不透明，并在
 RuntimeProfile/LoadPlan 冻结前完成校验与安装。
+
+模板不得注册自有业务 manifest 或 Runner。命令、回复、Agent 流程及其他产品行为必须由
+BotPlugins、AgentKit 或独立业务仓库提供；零插件模板只启动空闲 Runtime。
 
 所有跨仓库 Cargo 依赖使用远端 Git URL 和已推送固定 `rev`。配置与 secret 不提交；缺失
 capability、artifact、backend 或 secret 必须 fail loud。

@@ -1,7 +1,7 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use example_bot::{assemble_service, repository_local_config_path};
+use mutsuki_bot::{assemble_service, repository_local_config_path};
 use mutsuki_service_config::{ConfigOverrides, ServiceConfig};
 
 #[tokio::main(flavor = "multi_thread")]

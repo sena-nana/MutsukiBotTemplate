@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use example_bot::assemble_service;
+use mutsuki_bot::assemble_service;
 use mutsuki_bot_testkit::FakeQqServer;
 use mutsuki_service_config::{ConfigOverrides, ServiceConfig};
 use mutsuki_service_control::ControlMethod;
@@ -33,10 +33,6 @@ async fn external_config_runs_real_service_runtime_through_fake_qq_boundaries() 
     let control_config = service.clone();
 
     let runtime = assemble_service(service).unwrap().start().await.unwrap();
-    let sends = fake.wait_for_sends(2, Duration::from_secs(5)).await;
-    assert_eq!(sends[0]["content"], "hello");
-    assert_eq!(sends[1]["content"], "pong");
-
     let health = tokio::time::timeout(Duration::from_secs(2), async {
         loop {
             let health = control(&control_config, ControlMethod::HealthCheck).await;
@@ -56,16 +52,10 @@ async fn external_config_runs_real_service_runtime_through_fake_qq_boundaries() 
 
     let tasks = control(&control_config, ControlMethod::TaskList).await;
     let task_json = tasks.to_string();
-    for expected in [
-        "mutsuki.bot.qqbot.gateway/frame@1",
-        "mutsuki.bot.command/parse@1",
-        "mutsuki.bot.command/handle@1",
-        "mutsuki.bot.message/send@1",
-        "echo-1",
-        "ping-1",
-    ] {
-        assert!(task_json.contains(expected), "missing task fact {expected}");
-    }
+    assert!(task_json.contains("mutsuki.bot.qqbot.gateway/frame@1"));
+    assert!(!task_json.contains("mutsuki.bot.command/parse@1"));
+    assert!(!task_json.contains("mutsuki.bot.command/handle@1"));
+    assert!(!task_json.contains("mutsuki.bot.message/send@1"));
     assert!(!task_json.contains("TEST_CLIENT_SECRET"));
     assert!(!task_json.contains("TEST_ACCESS_TOKEN"));
 
@@ -104,16 +94,6 @@ token = "test-token"
 builtin = []
 dynamic_dirs = []
 disabled_dir = "disabled"
-
-[[plugins.configured]]
-id = "mutsuki.bot.router.event"
-[plugins.configured.config]
-subscriptions = [{{ subscription_id = "qq-command", handler_protocol_id = "mutsuki.bot.command/parse@1", platform = "qqbot", event_kind = "message_created" }}]
-
-[[plugins.configured]]
-id = "mutsuki.bot.command"
-[plugins.configured.config]
-prefixes = ["/"]
 
 [[plugins.configured]]
 id = "mutsuki.bot.adapter.qqbot"

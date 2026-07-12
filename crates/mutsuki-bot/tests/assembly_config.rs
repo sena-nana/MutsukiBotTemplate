@@ -1,13 +1,13 @@
 use std::path::Path;
 
-use example_bot::assemble_service;
+use mutsuki_bot::assemble_service;
 use mutsuki_service_config::{ConfigOverrides, ServiceConfig};
 use tempfile::tempdir;
 
 const SIMPLE_TEMPLATE: &str = include_str!("../../../config/template.toml");
 
 #[tokio::test]
-async fn external_service_config_starts_only_the_neutral_business_plugin() {
+async fn empty_external_config_starts_and_stops_neutral_runtime() {
     let root = tempdir().unwrap();
     let config_path = root.path().join("product.toml");
     std::fs::write(&config_path, service_toml(root.path(), "")).unwrap();
@@ -15,6 +15,32 @@ async fn external_service_config_starts_only_the_neutral_business_plugin() {
 
     let runtime = assemble_service(service).unwrap().start().await.unwrap();
     runtime.shutdown().await;
+}
+
+#[tokio::test]
+async fn unknown_configured_plugin_fails_loud() {
+    let root = tempdir().unwrap();
+    let config_path = root.path().join("product.toml");
+    std::fs::write(
+        &config_path,
+        service_toml(
+            root.path(),
+            r#"
+[[plugins.configured]]
+id = "owner.plugin.not-linked"
+"#,
+        ),
+    )
+    .unwrap();
+
+    let error = match assemble_service(load(&config_path)).unwrap().start().await {
+        Ok(runtime) => {
+            runtime.shutdown().await;
+            panic!("unknown configured plugin started")
+        }
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("owner.plugin.not-linked"));
 }
 
 #[tokio::test]
@@ -61,16 +87,12 @@ fn committed_template_exposes_only_product_configuration() {
         .replace('\\', "/");
     let config = SIMPLE_TEMPLATE.replace("[service]", &format!("[service]\nhome_dir = \"{home}\""));
     std::fs::write(&config_path, config).unwrap();
-    std::fs::write(
-        &secret_path,
-        "[secrets]\nQQBOT_CLIENT_SECRET = \"test-secret\"\n",
-    )
-    .unwrap();
+    std::fs::write(&secret_path, "[secrets]\n").unwrap();
 
     let service = load(&config_path);
 
     assert_eq!(service.service.instance_id, "mutsuki-bot");
-    assert_eq!(service.plugins.configured.len(), 3);
+    assert!(service.plugins.configured.is_empty());
     assert_eq!(service.core.max_tasks, 4096);
     assert!(service.runners.restart);
     assert!(!SIMPLE_TEMPLATE.contains("[core]"));
