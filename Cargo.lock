@@ -272,6 +272,9 @@ dependencies = [
 name = "example-bot"
 version = "0.1.0"
 dependencies = [
+ "mutsuki-agent-bundle",
+ "mutsuki-agent-protocol",
+ "mutsuki-agent-sdk",
  "mutsuki-bot-protocol",
  "mutsuki-bot-sdk",
  "mutsuki-plugin-bot-adapter-qqbot",
@@ -282,9 +285,12 @@ dependencies = [
  "mutsuki-runtime-host",
  "mutsuki-runtime-sdk",
  "mutsuki-service-config",
+ "mutsuki-service-control",
+ "mutsuki-service-ipc",
  "mutsuki-service-runtime",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "toml",
 ]
@@ -779,6 +785,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "linux-raw-sys"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
+
+[[package]]
 name = "litemap"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -823,6 +835,55 @@ dependencies = [
 ]
 
 [[package]]
+name = "mutsuki-agent-bundle"
+version = "0.1.0"
+dependencies = [
+ "mutsuki-agent-protocol",
+ "mutsuki-plugin-agent-context",
+ "mutsuki-plugin-agent-loop",
+ "mutsuki-plugin-agent-memory-router",
+ "mutsuki-plugin-agent-model-gateway",
+ "mutsuki-plugin-agent-prompt",
+ "mutsuki-plugin-agent-session",
+ "mutsuki-plugin-agent-tool-router",
+ "mutsuki-runtime-contracts",
+ "mutsuki-runtime-core",
+ "mutsuki-runtime-sdk",
+ "tokio",
+]
+
+[[package]]
+name = "mutsuki-agent-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "mutsuki-agent-protocol"
+version = "0.1.0"
+dependencies = [
+ "mutsuki-runtime-contracts",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "mutsuki-agent-sdk"
+version = "0.1.0"
+dependencies = [
+ "mutsuki-agent-macros",
+ "mutsuki-agent-protocol",
+ "mutsuki-runtime-sdk",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "mutsuki-bot-protocol"
 version = "0.1.0"
 dependencies = [
@@ -842,6 +903,86 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "mutsuki-plugin-agent-context"
+version = "0.1.0"
+dependencies = [
+ "mutsuki-agent-protocol",
+ "mutsuki-agent-sdk",
+ "mutsuki-runtime-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "mutsuki-plugin-agent-loop"
+version = "0.1.0"
+dependencies = [
+ "mutsuki-agent-protocol",
+ "mutsuki-agent-sdk",
+ "mutsuki-runtime-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "mutsuki-plugin-agent-memory-router"
+version = "0.1.0"
+dependencies = [
+ "mutsuki-agent-protocol",
+ "mutsuki-agent-sdk",
+ "mutsuki-runtime-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "mutsuki-plugin-agent-model-gateway"
+version = "0.1.0"
+dependencies = [
+ "mutsuki-agent-protocol",
+ "mutsuki-agent-sdk",
+ "mutsuki-runtime-core",
+ "mutsuki-runtime-sdk",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "mutsuki-plugin-agent-prompt"
+version = "0.1.0"
+dependencies = [
+ "mutsuki-agent-protocol",
+ "mutsuki-agent-sdk",
+ "mutsuki-runtime-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "mutsuki-plugin-agent-session"
+version = "0.1.0"
+dependencies = [
+ "mutsuki-agent-protocol",
+ "mutsuki-agent-sdk",
+ "mutsuki-runtime-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "mutsuki-plugin-agent-tool-router"
+version = "0.1.0"
+dependencies = [
+ "mutsuki-agent-protocol",
+ "mutsuki-agent-sdk",
+ "mutsuki-runtime-sdk",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1283,6 +1424,7 @@ checksum = "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3"
 dependencies = [
  "base64",
  "bytes",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "http",
@@ -1342,6 +1484,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
 dependencies = [
  "semver",
+]
+
+[[package]]
+name = "rustix"
+version = "1.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6fe4565b9518b83ef4f91bb47ce29620ca828bd32cb7e408f0062e9930ba190"
+dependencies = [
+ "bitflags",
+ "errno",
+ "libc",
+ "linux-raw-sys",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1645,6 +1800,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "tempfile"
+version = "3.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
+dependencies = [
+ "fastrand",
+ "getrandom 0.4.3",
+ "once_cell",
+ "rustix",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

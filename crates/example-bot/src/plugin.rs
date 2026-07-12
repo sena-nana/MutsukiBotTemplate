@@ -14,10 +14,19 @@ use mutsuki_runtime_core::{Runner, RunnerContext, RuntimeResult};
 use mutsuki_runtime_sdk::{PluginBuilder, map_work_batch_entries};
 use serde_json::json;
 
+#[cfg(feature = "agent-bot")]
+use mutsuki_agent_protocol::{
+    AGENT_RUN_PROTOCOL, AgentMessage, AgentModelResultCallback, AgentRunRequest,
+};
+#[cfg(feature = "agent-bot")]
+use serde::{Deserialize, Serialize};
+
 use crate::commands;
 
 pub const BUSINESS_PLUGIN_ID: &str = "template.example_bot.business";
 pub const BUSINESS_RUNNER_ID: &str = "template.example_bot.command";
+#[cfg(feature = "agent-bot")]
+pub const AGENT_RESULT_PROTOCOL_ID: &str = "template.agent.result/handle@1";
 
 pub fn manifest(generation: u64) -> PluginManifest {
     PluginBuilder::new(BUSINESS_PLUGIN_ID)
@@ -54,6 +63,8 @@ impl Runner for BusinessRunner {
     ) -> RuntimeResult<CompletionBatch> {
         map_work_batch_entries(&batch, |task| match task.protocol_id.as_str() {
             BOT_COMMAND_HANDLE_PROTOCOL_ID => handle_command(task, ctx.registry_generation),
+            #[cfg(feature = "agent-bot")]
+            AGENT_RESULT_PROTOCOL_ID => handle_agent_result(task, ctx.registry_generation),
             _ => Err(failure(format!(
                 "unsupported.protocol:{}",
                 task.protocol_id
@@ -71,7 +82,7 @@ pub fn descriptor(generation: u64) -> RunnerDescriptor {
         purity: RunnerPurity::Pure,
         execution_class: ExecutionClass::Orchestration,
         input_schema: json!({"type": "object", "required": ["source", "name", "args"]}),
-        output_schema: json!({"tasks": [BOT_MESSAGE_SEND_PROTOCOL_ID]}),
+        output_schema: json!({"tasks": output_protocols()}),
         batch: RunnerBatchCapability {
             mode: RunnerMode::NativeBatch,
             preferred_batch_size: 16,
@@ -99,8 +110,25 @@ pub fn descriptor(generation: u64) -> RunnerDescriptor {
     }
 }
 
+#[cfg(not(feature = "agent-bot"))]
 fn accepted_protocols() -> Vec<String> {
     vec![BOT_COMMAND_HANDLE_PROTOCOL_ID.into()]
+}
+#[cfg(feature = "agent-bot")]
+fn accepted_protocols() -> Vec<String> {
+    vec![
+        BOT_COMMAND_HANDLE_PROTOCOL_ID.into(),
+        AGENT_RESULT_PROTOCOL_ID.into(),
+    ]
+}
+
+#[cfg(not(feature = "agent-bot"))]
+fn output_protocols() -> Vec<&'static str> {
+    vec![BOT_MESSAGE_SEND_PROTOCOL_ID]
+}
+#[cfg(feature = "agent-bot")]
+fn output_protocols() -> Vec<&'static str> {
+    vec![BOT_MESSAGE_SEND_PROTOCOL_ID, AGENT_RUN_PROTOCOL]
 }
 
 fn handle_command(task: &Task, registry_generation: u64) -> Result<RunnerResult, RuntimeError> {
@@ -112,6 +140,16 @@ fn handle_command(task: &Task, registry_generation: u64) -> Result<RunnerResult,
         .as_ref()
         .and_then(|message| message.message_id.clone());
     let mut result = RunnerResult::completed(task.task_id.clone());
+    #[cfg(feature = "agent-bot")]
+    if matches!(command.name.as_str(), "ask" | "ask-tool") {
+        result.tasks.push(agent_task(
+            task,
+            registry_generation,
+            &command,
+            source_message_id,
+        )?);
+        return Ok(result);
+    }
     if let Some(text) = commands::reply(&command.name, &command.args) {
         result.tasks.push(send_task(
             task,
@@ -122,6 +160,83 @@ fn handle_command(task: &Task, registry_generation: u64) -> Result<RunnerResult,
             text,
         )?);
     }
+    Ok(result)
+}
+
+#[cfg(feature = "agent-bot")]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct AgentReplyContext {
+    source_event_id: String,
+    target: BotTarget,
+    reply_to: Option<String>,
+    session_id: String,
+}
+
+#[cfg(feature = "agent-bot")]
+fn agent_task(
+    parent: &Task,
+    registry_generation: u64,
+    command: &BotCommandEvent,
+    reply_to: Option<String>,
+) -> Result<Task, RuntimeError> {
+    let question = command.args.join(" ");
+    let session_id = format!(
+        "bot:{}",
+        serde_json::to_string(&command.source.target)
+            .map_err(|error| failure(format!("target.encode:{error}")))?
+    );
+    let context = AgentReplyContext {
+        source_event_id: command.source.event_id.clone(),
+        target: command.source.target.clone(),
+        reply_to,
+        session_id: session_id.clone(),
+    };
+    let mut request =
+        AgentRunRequest::new("template-agent", vec![AgentMessage::user(question.clone())]);
+    request.session_id = Some(session_id);
+    request.result_protocol_id = Some(AGENT_RESULT_PROTOCOL_ID.into());
+    request.result_context = Some(
+        serde_json::to_value(context)
+            .map_err(|error| failure(format!("agent.context.encode:{error}")))?,
+    );
+    if command.name == "ask-tool" {
+        request.metadata = Some(json!({"tool": {"name": "echo", "input": {"question": question}}}));
+    }
+    let mut child = Task::new(
+        format!("template.example_bot.agent:{}", command.source.event_id),
+        AGENT_RUN_PROTOCOL,
+        serde_json::to_value(request)
+            .map_err(|error| failure(format!("agent.request.encode:{error}")))?,
+    );
+    inherit_task_context(parent, &mut child, registry_generation);
+    Ok(child)
+}
+
+#[cfg(feature = "agent-bot")]
+fn handle_agent_result(
+    task: &Task,
+    registry_generation: u64,
+) -> Result<RunnerResult, RuntimeError> {
+    let callback: AgentModelResultCallback = serde_json::from_value(task.payload.clone())
+        .map_err(|error| failure(format!("agent.result.decode:{error}")))?;
+    let context: AgentReplyContext = serde_json::from_value(
+        callback
+            .context
+            .ok_or_else(|| failure("agent.result.context_missing"))?,
+    )
+    .map_err(|error| failure(format!("agent.context.decode:{error}")))?;
+    if callback.session_id.as_deref() != Some(context.session_id.as_str()) {
+        return Err(failure("agent.result.session_mismatch"));
+    }
+    let mut result = RunnerResult::completed(task.task_id.clone());
+    result.tasks.push(send_task(
+        task,
+        registry_generation,
+        context.source_event_id,
+        context.target,
+        context.reply_to,
+        callback.result.message.content,
+    )?);
     Ok(result)
 }
 

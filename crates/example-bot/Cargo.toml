@@ -4,6 +4,14 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+agent-bot = [
+    "dep:mutsuki-agent-bundle",
+    "dep:mutsuki-agent-protocol",
+    "dep:mutsuki-agent-sdk",
+]
+
 [dependencies]
 mutsuki-runtime-contracts.workspace = true
 mutsuki-runtime-core.workspace = true
@@ -16,7 +24,15 @@ mutsuki-bot-sdk.workspace = true
 mutsuki-plugin-bot-adapter-qqbot.workspace = true
 mutsuki-plugin-bot-command.workspace = true
 mutsuki-plugin-bot-event-router.workspace = true
+mutsuki-agent-bundle = { workspace = true, optional = true }
+mutsuki-agent-protocol = { workspace = true, optional = true }
+mutsuki-agent-sdk = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 toml.workspace = true
+
+[dev-dependencies]
+mutsuki-service-control.workspace = true
+mutsuki-service-ipc.workspace = true
+tempfile.workspace = true

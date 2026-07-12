@@ -1,9 +1,13 @@
+#[cfg(feature = "agent-bot")]
+pub mod agent_tool;
 pub mod commands;
 pub mod mock_transport;
 pub mod plugin;
 
 use std::collections::BTreeMap;
 use std::path::Path;
+#[cfg(feature = "agent-bot")]
+use std::sync::Arc;
 
 use mutsuki_bot_protocol::{BOT_COMMAND_PARSE_PROTOCOL_ID, BotEventKind, BotEventSubscription};
 use mutsuki_plugin_bot_adapter_qqbot::{QqBotConfig, QqBotPluginBundle};
@@ -14,6 +18,12 @@ use mutsuki_runtime_host::RuntimeBootstrapper;
 use mutsuki_service_config::ServiceConfig;
 use mutsuki_service_runtime::ServiceRuntimeBuilder;
 use serde::Deserialize;
+
+#[cfg(feature = "agent-bot")]
+use mutsuki_agent_bundle::{
+    AgentLoop, AgentPluginBundle, AgentRuntimeRunner, HttpModelProvider, HttpModelProviderOptions,
+    ModelGateway,
+};
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -28,6 +38,32 @@ pub struct QqBotProfile {
     pub transport: QqTransportProfile,
     #[serde(default)]
     pub gateway: QqGatewayProfile,
+    #[serde(default)]
+    pub agent: AgentProfile,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AgentProfile {
+    pub provider_id: String,
+    pub endpoint: String,
+    pub model: String,
+    pub secret_key: String,
+    pub timeout_ms: u64,
+    pub max_retries: u8,
+}
+
+impl Default for AgentProfile {
+    fn default() -> Self {
+        Self {
+            provider_id: "http".into(),
+            endpoint: "https://api.openai.com/v1/chat/completions".into(),
+            model: "gpt-4.1-mini".into(),
+            secret_key: "AGENT_MODEL_API_KEY".into(),
+            timeout_ms: 30_000,
+            max_retries: 1,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -146,7 +182,7 @@ pub fn assemble_real_service(
     profile: &QqBotProfile,
 ) -> Result<ServiceRuntimeBuilder, Box<dyn std::error::Error>> {
     let subscription = command_subscription();
-    let builder = ServiceRuntimeBuilder::new(service)
+    let builder = ServiceRuntimeBuilder::new(service.clone())
         .register_builtin_plugin(bot_event_router_manifest(1))
         .register_builtin_plugin(bot_command_manifest(1))
         .register_builtin_plugin(plugin::manifest(1))
@@ -155,7 +191,112 @@ pub fn assemble_real_service(
         })
         .register_builtin_runner(|| Box::new(BotCommandRunner::new(1, vec!["/".into()])))
         .register_builtin_runner(|| plugin::runner(1));
+    #[cfg(feature = "agent-bot")]
+    let builder = {
+        let secret = service
+            .secret(&profile.agent.secret_key)
+            .ok_or_else(|| format!("missing Host secret {}", profile.agent.secret_key))?;
+        let agent = http_agent_bundle(
+            HttpModelProviderOptions {
+                provider_id: profile.agent.provider_id.clone(),
+                endpoint: profile.agent.endpoint.clone(),
+                default_model: profile.agent.model.clone(),
+                timeout_ms: profile.agent.timeout_ms,
+                max_retries: profile.agent.max_retries,
+            },
+            secret,
+        )?;
+        agent.tools.register(agent_tool::tool_descriptor())?;
+        let builder = builder
+            .register_builtin_plugin(agent_tool::manifest(1))
+            .register_builtin_runner(|| agent_tool::runner(1));
+        install_agent_bundle(builder, agent)
+    };
     Ok(QqBotPluginBundle::new(profile.adapter_config())?.install(builder)?)
+}
+
+#[cfg(feature = "agent-bot")]
+pub fn assemble_mock_agent_service(service: ServiceConfig) -> ServiceRuntimeBuilder {
+    assemble_agent_service(service, AgentPluginBundle::default())
+}
+
+#[cfg(feature = "agent-bot")]
+pub fn assemble_agent_service(
+    service: ServiceConfig,
+    agent: AgentPluginBundle,
+) -> ServiceRuntimeBuilder {
+    agent
+        .tools
+        .register(agent_tool::tool_descriptor())
+        .expect("template echo tool descriptor is valid");
+    install_agent_bundle(
+        ServiceRuntimeBuilder::new(service)
+            .register_builtin_plugin(bot_event_router_manifest(1))
+            .register_builtin_plugin(bot_command_manifest(1))
+            .register_builtin_plugin(plugin::manifest(1))
+            .register_builtin_plugin(mock_transport::manifest(1))
+            .register_builtin_plugin(agent_tool::manifest(1))
+            .register_builtin_runner(move || {
+                Box::new(BotEventRouterRunner::new(1, vec![command_subscription()]))
+            })
+            .register_builtin_runner(|| Box::new(BotCommandRunner::new(1, vec!["/".into()])))
+            .register_builtin_runner(|| plugin::runner(1))
+            .register_builtin_runner(|| mock_transport::runner(1))
+            .register_builtin_runner(|| agent_tool::runner(1)),
+        agent,
+    )
+}
+
+#[cfg(feature = "agent-bot")]
+fn http_agent_bundle(
+    options: HttpModelProviderOptions,
+    secret: String,
+) -> mutsuki_agent_protocol::AgentResult<AgentPluginBundle> {
+    let provider_id = options.provider_id.clone();
+    let default_model = options.default_model.clone();
+    let gateway = ModelGateway::with_default_provider(provider_id);
+    gateway.register(Arc::new(HttpModelProvider::new(options, secret)?));
+    Ok(AgentPluginBundle {
+        agent_loop: AgentLoop::default().with_default_model(default_model),
+        model: gateway,
+        ..AgentPluginBundle::default()
+    })
+}
+
+#[cfg(feature = "agent-bot")]
+fn install_agent_bundle(
+    mut builder: ServiceRuntimeBuilder,
+    agent: AgentPluginBundle,
+) -> ServiceRuntimeBuilder {
+    for manifest in agent.manifests() {
+        builder = builder.register_builtin_plugin(manifest);
+    }
+    for kind in AgentRuntimeRunner::ALL {
+        let agent = agent.clone();
+        builder = builder
+            .register_runtime_client_runner(move |client| agent.runtime_runner(kind, client));
+    }
+    let effect = agent.clone();
+    builder = builder.register_fallible_builtin_runner(move || {
+        let handle = tokio::runtime::Handle::try_current()
+            .map_err(|error| format!("Host Tokio runtime is required: {error}"))?;
+        Ok::<_, String>(effect.http_effect_runner(handle))
+    });
+    let poll = agent.clone();
+    builder = builder.register_builtin_runner(move || poll.model_poll_runner());
+    let health_agent = agent;
+    builder.register_health_probe("mutsuki.agent", move || {
+        let health = health_agent.model.health_snapshot();
+        serde_json::json!({
+            "status": if health.ready { "ok" } else { "degraded" },
+            "model": {
+                "default_provider": health.default_provider,
+                "providers": health.providers,
+                "ready": health.ready,
+            },
+            "runners": AgentPluginBundle::runner_ids()
+        })
+    })
 }
 
 pub fn mock_runtime() -> mutsuki_runtime_core::RuntimeResult<mutsuki_runtime_core::CoreRuntime> {

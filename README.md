@@ -15,6 +15,20 @@ cargo test
 
 默认运行真实 batch-first command/business runner，不需要网络或凭据。
 
+## 可选 Agent Bot
+
+`agent-bot` feature 增加 `/ask <question>` 与 `/ask-tool <question>`，默认构建不依赖
+AgentKit。离线 mock provider 验收：
+
+```powershell
+cargo test -p example-bot --features agent-bot
+```
+
+QQBot 真实模式下，`[agent]` 只保存 provider endpoint、model 与 secret key 名称；API key
+通过 `$env:MUTSUKI_SECRET_AGENT_MODEL_API_KEY` 注入。Agent 输出经
+`template.agent.result/handle@1` 回到业务 runner，再产生 `mutsuki.bot.message/send@1`；
+AgentKit 不接触 QQ 专用结构。
+
 ## QQBot 模式
 
 复制 `config/qqbot.example.toml` 为被 `.gitignore` 排除的 `config/local.toml`，只填写非 secret 配置。Secret 通过 Host boundary 注入：

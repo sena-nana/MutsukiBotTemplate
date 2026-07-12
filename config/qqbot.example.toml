@@ -24,3 +24,11 @@ reconnect_initial_delay_ms = 500
 reconnect_max_delay_ms = 30000
 reconnect_jitter_ms = 250
 rate_limit_delay_ms = 60000
+
+[agent]
+provider_id = "http"
+endpoint = "https://api.openai.com/v1/chat/completions"
+model = "gpt-4.1-mini"
+secret_key = "AGENT_MODEL_API_KEY"
+timeout_ms = 30000
+max_retries = 1
