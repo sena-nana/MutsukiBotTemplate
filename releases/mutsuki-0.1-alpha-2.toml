@@ -1,6 +1,6 @@
 schema_version = 1
-release = "mutsuki-0.1-alpha-1"
-status = "unsupported"
+release = "mutsuki-0.1-alpha-2"
+status = "active"
 contracts_api = "0.1.0"
 runtime_wire_schema = "mutsuki.runtime.wire/1.0.0"
 rust_msrv = "1.88"
@@ -47,7 +47,7 @@ kind = "rust"
 [[repositories]]
 id = "distributed_host"
 url = "https://github.com/sena-nana/MutsukiDistributedHost.git"
-revision = "d418f750a3039cf0c0a6667c15f95d7bd396c309"
+revision = "99c0e8489e5c438177bb7a245182aa7e14973df9"
 kind = "rust"
 
 [[repositories]]
