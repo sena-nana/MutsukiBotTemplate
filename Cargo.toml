@@ -8,8 +8,8 @@ edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
-mutsuki-distributed-contracts = { git = "https://github.com/sena-nana/MutsukiDistributedHost.git", rev = "146dc7f064e38efff10be3367a957ad2c9f47868" }
-mutsuki-distributed-control-client = { git = "https://github.com/sena-nana/MutsukiDistributedHost.git", rev = "146dc7f064e38efff10be3367a957ad2c9f47868" }
+mutsuki-distributed-contracts = { git = "https://github.com/sena-nana/MutsukiDistributedHost.git", rev = "f25d266081ff4064eec2554d9134f35730a324ca" }
+mutsuki-distributed-control-client = { git = "https://github.com/sena-nana/MutsukiDistributedHost.git", rev = "f25d266081ff4064eec2554d9134f35730a324ca" }
 mutsuki-service-config = { git = "https://github.com/sena-nana/MutsukiServiceHost.git", rev = "764b03ec41c9e6c02dfdfd00dd222ec5d77e13b4" }
 mutsuki-service-runtime = { git = "https://github.com/sena-nana/MutsukiServiceHost.git", rev = "764b03ec41c9e6c02dfdfd00dd222ec5d77e13b4", default-features = false }
 mutsuki-service-control = { git = "https://github.com/sena-nana/MutsukiServiceHost.git", rev = "764b03ec41c9e6c02dfdfd00dd222ec5d77e13b4" }
